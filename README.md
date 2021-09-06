@@ -94,14 +94,37 @@ prevent this:
 #### Patching Django
 
 Although Django does not support composite keys out-of-the-box, there is some _partial_ support for composite keys.
-The schema modifying _almost_ supports composite key creation. It makes use of `Column` objects that will happily render
-multiple columns and interpolates that into the foreign key creation template just fine. However it forces the use of a
-single column on both sides of the key – it's this minor update to retrieve multiple columns from a customised Django
-ForeignKey that allows us to create the required constraints.
+
+Django's schema editors can add foreign keys in 2 ways:
+
+1. The base schema editor defines method for adding foreign keys after initial table creation with _alter table_
+   statements. This way _almost_ supports composite key creation. It makes use of `Column` objects that will happily
+   render multiple columns and interpolates that into the foreign key creation template just fine. However it forces the
+   use of a single column on both sides of the key – it's this minor update to retrieve multiple columns from a
+   customised Django ForeignKey that allows us to create the required constraints.
+2. The database-specific schema editors optionally define syntax for column-level (Django refers to these as "inline")
+   constraints for both `CreateTable` and `AddField` operations.  Only table-level constraints support composite key
+   creation and Django does not have this ability for foreign keys. This needs to be disabled in order to force the
+   first way to be used.
+
+#### Using SETTINGS instead of Monkey-Patching
 
 This demonstration monkey-patches Django to achieve this but it is possible to do it without resorting to
 monkey-patching: Schema editors can be defined for specific database backends which are an extension point with Django.
 We could simply extend Django's PostgreSQL backend & schema editor classes and specify these in our `DATABASES` setting.
+
+#### Patching for Table-Level Constraints at Create Table Time + Auto Migration Operation Ordering Issues
+
+Using the patch from above, Django adds the foreign keys at the end of the migration – meaning that any data added in
+between will not be checked for constraint integrity rather failing during foreign key creation. If constraint
+definition at _create table_ time is more desirable then patching the schema editor's `table_sql()` method to add the
+table-level constraints could be possible. However this could mean that the auto-generated migration operations could
+fail unless manually ordered:
+
+As you can see from the auto-generated migration file, models may have foreign keys added after the initial create table
+operation. This can lead to situations where a `TenantForeignKey` has either source or target that does not yet have its
+tenant-id. [Eg `CreateModel()` for `Vendor` has a foreign key to `Level` that doesn't have a foreign
+key.](https://github.com/shangxiao/django-multitenant-demo/blob/master/app/migrations/0001_initial.py#L83)
 
 #### Database Support
 
@@ -109,9 +132,7 @@ This demo shows how to work with PostgreSQL but should also theoretically work w
 targeting unique constraints.
 
 SQLite support will require a bit more patching within Django. SQLite does not support adding foreign keys with alter
-table statements – only within the create table statement whereas Django only supports foreign keys within create table
-statments as column (Django refers to these as "inline") constraints. The schema editor's `table_sql()` method could be
-patched to create table-level constraints required to create the composite foreign keys.
+table statements – only within the create table statement. This would require patching `table_sql()` as mentioned above.
 
 #### More Possible Utilities
 
