@@ -134,8 +134,9 @@ targeting unique constraints.
 SQLite support will require a bit more patching within Django. SQLite does not support adding foreign keys with alter
 table statements – only within the create table statement. This would require patching `table_sql()` as mentioned above.
 
-#### More Possible Utilities
+#### Further Work
 
+ * Fix errors when reverse-migrating: requires adding `CASCADE` to delete statement?
  * Define tenant relationships for `OneToOneField` and `ManyToManyField`
  * Define a check that errors if a `TenantForeignKey` is used and both sides of the relationship are not `TenantModel`
    types.
